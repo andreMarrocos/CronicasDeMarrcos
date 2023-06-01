@@ -4,7 +4,7 @@ from pygame.locals import *
 
 # Create Game Window
 pygame.init()
-pygame.display.set_caption('Menu')
+pygame.display.set_caption('Crônicas de Marrcos')
 screen_width = 1280
 screen_height = 720
 screen = pygame.display.set_mode((screen_width, screen_height))
@@ -24,15 +24,31 @@ red = (255, 0, 0)
 gray = (128, 128, 128)
 
 
-class Archer(pygame.sprite.Sprite):
+class Player(pygame.sprite.Sprite):
     def __init__(self, char_type, x, y, scale, speed):
         pygame.sprite.Sprite.__init__(self)
+        self.alive = True
         self.char_type = char_type
         self.speed = speed
         self.direction = 1
         self.flip = False
-        img = pygame.image.load(f'Images/{self.char_type}/archer.png')
-        self.image = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
+        self.animation_list = []
+        self.frame_index = 0
+        self.action = 0
+        self.update_time = pygame.time.get_ticks()
+        temp_list = []
+        for i in range(5):
+            img = pygame.image.load(f'Images/{self.char_type}/idle/{i}.png')
+            img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
+            temp_list.append(img)
+        self.animation_list.append(temp_list)
+        temp_list = []
+        for i in range(8):
+            img = pygame.image.load(f'Images/{self.char_type}/run/{i}.png')
+            img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
+            temp_list.append(img)
+        self.animation_list.append(temp_list)
+        self.image = self.animation_list[self.action][self.frame_index]
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
 
@@ -57,12 +73,34 @@ class Archer(pygame.sprite.Sprite):
         self.rect.x += dx
         self.rect.y += dy
 
+    def update_animation(self):
+        #update animation
+        animation_cooldown = 100
+        #update image depending on current frame
+        self.image = self.animation_list[self.action][self.frame_index]
+        #check if enough time has passed since the last update
+        if pygame.time.get_ticks() - self.update_time > animation_cooldown:
+            self.update_time = pygame.time.get_ticks()
+            self.frame_index += 1
+        #if the animation has run out the reset back to the start
+        if self.frame_index >= len(self.animation_list[self.action]):
+            self.frame_index = 0
+
+    def update_action(self,new_action):
+        #check if the new action is different to the previous one
+        if new_action != self.action:
+            self.action = new_action
+            #update the animation settings
+            self.frame_index = 0
+            self.update_time = pygame.time.get_ticks()
+
+
     def draw(self):
         screen.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
 
 
-player = Archer('player',200, 200, 0.1, 3)
-enemy = Archer('enemy',400, 200, 0.1, 3)
+player = Player('player',200, 200, 1, 3)
+enemy = Player('enemy',400, 200, 1, 3)
 
 
 
@@ -99,8 +137,15 @@ def play():
                     moving_up = False
                 if event.key == K_s:
                     moving_down = False
+        #update player actions
+        if player.alive:
+            if moving_left or moving_up or moving_right or moving_down:
+                player.update_action(1) #1: run
+            else:
+                player.update_action(0)
         player.move(moving_left, moving_up, moving_right, moving_down)
         screen.fill(gray)
+        player.update_animation()
         player.draw()
         enemy.draw()
         pygame.display.flip()
