@@ -1,5 +1,7 @@
 import pygame
 import sys
+import os
+import math
 from pygame.locals import *
 
 # Create Game Window
@@ -16,6 +18,10 @@ moving_left = False
 moving_right = False
 moving_up = False
 moving_down = False
+shoot = False
+
+#load images
+bullet_img = pygame.image.load('Images/player/ammo/0.png').convert_alpha()
 
 # Colors
 black = (0, 0, 0)
@@ -25,10 +31,13 @@ gray = (128, 128, 128)
 
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, char_type, x, y, scale, speed):
+    def __init__(self, char_type, x, y, scale, speed, health):
         pygame.sprite.Sprite.__init__(self)
         self.alive = True
         self.char_type = char_type
+        self.shoot_cooldown = 0
+        self.health = health
+        self.max_health = self.health
         self.speed = speed
         self.direction = 1
         self.flip = False
@@ -36,21 +45,31 @@ class Player(pygame.sprite.Sprite):
         self.frame_index = 0
         self.action = 0
         self.update_time = pygame.time.get_ticks()
-        temp_list = []
-        for i in range(5):
-            img = pygame.image.load(f'Images/{self.char_type}/idle/{i}.png')
-            img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        temp_list = []
-        for i in range(8):
-            img = pygame.image.load(f'Images/{self.char_type}/run/{i}.png')
-            img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
-            temp_list.append(img)
+
+        #load all images fdor the players
+        animation_types = ['idle', 'run', 'attack', 'death']
+        for animation in animation_types:
+            #reset temporary list of images
+            temp_list = []
+            # count number of files in folder
+            num_of_frames = len(os.listdir(f'Images/{self.char_type}/{animation}'))
+            for i in range(num_of_frames):
+                img = pygame.image.load(f'Images/{self.char_type}/{animation}/{i}.png').convert_alpha()
+                img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
+                temp_list.append(img)
+            self.animation_list.append(temp_list)
+
         self.animation_list.append(temp_list)
         self.image = self.animation_list[self.action][self.frame_index]
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
+
+    def update(self):
+        self.update_animation()
+        self.check_alive()
+        #update cooldown
+        if self.shoot_cooldown > 0:
+            self.shoot_cooldown -= 1
 
     def move(self, moving_left, moving_up, moving_right, moving_down):
         #reset movement variables
@@ -84,7 +103,34 @@ class Player(pygame.sprite.Sprite):
             self.frame_index += 1
         #if the animation has run out the reset back to the start
         if self.frame_index >= len(self.animation_list[self.action]):
-            self.frame_index = 0
+            if self.action == 3:
+                self.frame_index = len(self.animation_list[self.action]) -1
+            else:
+                self.frame_index = 0
+
+    def shoot(self):
+        if self.shoot_cooldown == 0:
+            self.shoot_cooldown = 30
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+
+            # calculate the direction towards the target position
+            direction_x = mouse_x - self.rect.centerx
+            direction_y = mouse_y - self.rect.centery
+            distance = max(abs(direction_x), abs(direction_y))
+            if distance != 0:
+                direction_x /= distance
+                direction_y /= distance
+            else:
+                direction_x = 0
+                direction_y = 0
+
+            # adjust the initial position of the bullet
+            bullet_offset_x = direction_x * 50  # adjust the offset as needed
+            bullet_offset_y = direction_y * 70  # adjust the offset as needed
+
+            bullet = Bullet(self.rect.centerx + bullet_offset_x, self.rect.centery + bullet_offset_y, mouse_x, mouse_y)
+            bullet_group.add(bullet)
+
 
     def update_action(self,new_action):
         #check if the new action is different to the previous one
@@ -94,19 +140,83 @@ class Player(pygame.sprite.Sprite):
             self.frame_index = 0
             self.update_time = pygame.time.get_ticks()
 
+    def check_alive(self):
+        if self.health <= 0:
+            self.health = 0
+            self.speed = 0
+            self.alive = False
+            self.update_action(3)
 
     def draw(self):
         screen.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
 
 
-player = Player('player',200, 200, 1, 3)
-enemy = Player('enemy',400, 200, 1, 3)
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, target_x, target_y):
+        pygame.sprite.Sprite.__init__(self)
+        self.speed = 15
+        self.image = bullet_img
+        self.rect = self.image.get_rect()
+        self.rect.center = (x, y)
+
+        # calculate the direction towards the target position
+        direction_x = target_x - x
+        direction_y = target_y - y
+        distance = max(abs(direction_x), abs(direction_y))
+        if distance != 0:
+            self.direction_x = direction_x / distance
+            self.direction_y = direction_y / distance
+        else:
+            self.direction_x = 0
+            self.direction_y = 0
+
+        # calculate the angle of rotation
+        self.angle = math.degrees(math.atan2(-self.direction_y, self.direction_x))
+
+        # rotate the image
+        self.image = pygame.transform.rotate(self.image, self.angle)
+
+        # adjust the rect center based on the rotation
+        self.rect = self.image.get_rect(center=self.rect.center)
+
+    def update(self):
+        # move bullet
+        self.rect.x += self.direction_x * self.speed
+        self.rect.y += self.direction_y * self.speed
+        # check if bullet has gone off screen
+        if self.rect.right < 0 or self.rect.left > screen_width or self.rect.bottom < 0 or self.rect.top > screen_height:
+            self.kill()
+
+        #check collision with characters
+        if pygame.sprite.spritecollide(player, bullet_group, False):
+            if player.alive:
+                player.health -= 5
+                self.kill()
+        if pygame.sprite.spritecollide(enemy, bullet_group, False):
+            if enemy.alive:
+                enemy.health -= 20
+                print(enemy.health)
+                self.kill()
+
+
+
+
+#create sprite groups
+bullet_group = pygame.sprite.Group()
+
+
+
+player = Player('player', 200, 200, 1, 3, 100)
+enemy = Player('enemy', 400, 200, 1, 3, 60)
 
 
 
 def play():
-    global moving_right, moving_left, moving_up, moving_down
+    global moving_right, moving_left, moving_up, moving_down,shoot
     pygame.display.set_caption('Crônicas de Marrcos')
+
+
+
     while True:
         clock.tick(fps)
         for event in pygame.event.get():
@@ -123,6 +233,8 @@ def play():
                     moving_up = True
                 if event.key == K_s:
                     moving_down = True
+                if event.key == K_SPACE:
+                    shoot = True
                 if event.key == K_ESCAPE:
                     pygame.quit()
                     sys.exit()
@@ -137,16 +249,26 @@ def play():
                     moving_up = False
                 if event.key == K_s:
                     moving_down = False
+                if event.key == K_SPACE:
+                    shoot = False
         #update player actions
         if player.alive:
+            #shoot bullets
+            if shoot:
+                player.shoot()
             if moving_left or moving_up or moving_right or moving_down:
                 player.update_action(1) #1: run
             else:
-                player.update_action(0)
+                player.update_action(0) #0: idle
+
         player.move(moving_left, moving_up, moving_right, moving_down)
+        # update and draw groups
         screen.fill(gray)
-        player.update_animation()
+        bullet_group.update()
+        bullet_group.draw(screen)
+        player.update()
         player.draw()
+        enemy.update()
         enemy.draw()
         pygame.display.flip()
 
