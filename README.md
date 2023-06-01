@@ -1,2 +1,4 @@
 # CronicasDeMarrcos
-Crônicas de Marrcos
+
+Projeto para criação de um jogo Rogue Like, inicialmente de tiro.
+
