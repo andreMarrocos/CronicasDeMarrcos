@@ -214,7 +214,7 @@ enemy = Player('enemy', 400, 200, 1, 3, 60)
 def play():
     global moving_right, moving_left, moving_up, moving_down,shoot
     pygame.display.set_caption('Crônicas de Marrcos')
-
+    can_shoot = True
 
 
     while True:
@@ -233,11 +233,14 @@ def play():
                     moving_up = True
                 if event.key == K_s:
                     moving_down = True
-                if event.key == K_SPACE:
-                    shoot = True
                 if event.key == K_ESCAPE:
                     pygame.quit()
                     sys.exit()
+            if event.type == MOUSEBUTTONDOWN:
+                if event.button == 1 and can_shoot:
+                    shoot = True
+                    can_shoot = False
+
 
             # keyboard button released
             if event.type == KEYUP:
@@ -249,8 +252,12 @@ def play():
                     moving_up = False
                 if event.key == K_s:
                     moving_down = False
-                if event.key == K_SPACE:
+            if event.type == MOUSEBUTTONUP:
+                if event.button == 1:
                     shoot = False
+                    can_shoot = True
+
+
         #update player actions
         if player.alive:
             #shoot bullets
