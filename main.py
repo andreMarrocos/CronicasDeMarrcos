@@ -22,6 +22,10 @@ shoot = False
 
 #load images
 bullet_img = pygame.image.load('Images/player/ammo/0.png').convert_alpha()
+hearth_img = pygame.image.load('Images/items/hearth.png').convert_alpha()
+coin_img = pygame.image.load('Images/items/coin.png').convert_alpha()
+shield_img = pygame.image.load('Images/items/shield.png').convert_alpha()
+coin_img = pygame.transform.scale_by(coin_img, 2)
 
 # Colors
 black = (0, 0, 0)
@@ -150,6 +154,9 @@ class Player(pygame.sprite.Sprite):
     def draw(self):
         screen.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
 
+class ItemBox(pygame.sprite.Sprite):
+    def __init__(self, x, y, target_x, target_y):
+        pygame.sprite.Sprite.__init__(self)
 
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y, target_x, target_y):
@@ -217,6 +224,7 @@ def play():
     can_shoot = True
 
 
+
     while True:
         clock.tick(fps)
         for event in pygame.event.get():
@@ -278,6 +286,7 @@ def play():
         enemy.update()
         enemy.draw()
         pygame.display.flip()
+
 
 
 play()
