@@ -2,6 +2,7 @@ import pygame
 import sys
 import os
 import math
+import random
 from pygame.locals import *
 
 # Create Game Window
@@ -20,9 +21,11 @@ moving_right = False
 moving_up = False
 moving_down = False
 shoot = False
+mouse_pos = None
 
 #load images
 bullet_img = pygame.image.load('Images/player/ammo/0.png').convert_alpha()
+bullet_img = pygame.transform.scale_by(bullet_img, 0.75)
 hearth_img = pygame.image.load('Images/items/hearth.png').convert_alpha()
 coin_img = pygame.image.load('Images/items/coin.png').convert_alpha()
 shield_img = pygame.image.load('Images/items/shield.png').convert_alpha()
@@ -61,6 +64,11 @@ class Player(pygame.sprite.Sprite):
         self.frame_index = 0
         self.action = 0
         self.update_time = pygame.time.get_ticks()
+        #only for ai
+        self.move_counter = 0
+        self.vision = pygame.Rect(0, 0, 250, 250)
+        self.idling = False
+        self.idling_counter = 0
 
         #load all images fdor the players
         animation_types = ['idle', 'run', 'attack', 'death']
@@ -124,29 +132,60 @@ class Player(pygame.sprite.Sprite):
             else:
                 self.frame_index = 0
 
-    def shoot(self):
+    import math
+
+    def shoot(self, player_center_x, player_center_y):
         if self.shoot_cooldown == 0:
             self.shoot_cooldown = 30
-            mouse_x, mouse_y = pygame.mouse.get_pos()
 
-            # calculate the direction towards the target position
-            direction_x = mouse_x - self.rect.centerx
-            direction_y = mouse_y - self.rect.centery
-            distance = max(abs(direction_x), abs(direction_y))
+            # calculate the direction towards the player
+            direction_x = player_center_x - self.rect.centerx
+            direction_y = player_center_y - self.rect.centery
+            distance = math.hypot(direction_x, direction_y)
+
             if distance != 0:
                 direction_x /= distance
                 direction_y /= distance
+
+            # check if the distance is above a threshold before shooting
+            minimum_distance = 50  # adjust the minimum distance as needed
+            if distance > minimum_distance:
+                # adjust the initial position of the bullet
+                bullet_offset_x = direction_x * 50  # adjust the offset as needed
+                bullet_offset_y = direction_y * 50  # adjust the offset as needed
+
+                bullet = Bullet(self.rect.centerx + bullet_offset_x, self.rect.centery + bullet_offset_y,
+                                player_center_x,
+                                player_center_y)
+                bullet_group.add(bullet)
+
+    def ai(self):
+        if self.alive and player.alive:
+            # check if ai is near the player
+            if self.vision.colliderect(player.rect):
+                self.update_action(0)
+                self.shoot(player.rect.centerx, player.rect.centery)  # Atira em direção ao jogador
             else:
-                direction_x = 0
-                direction_y = 0
+                # calculate the direction towards the player
+                direction_x = player.rect.centerx - self.rect.centerx
+                direction_y = player.rect.centery - self.rect.centery
+                distance = math.hypot(direction_x, direction_y)
 
-            # adjust the initial position of the bullet
-            bullet_offset_x = direction_x * 50  # adjust the offset as needed
-            bullet_offset_y = direction_y * 70  # adjust the offset as needed
+                if distance != 0:
+                    direction_x /= distance
+                    direction_y /= distance
 
-            bullet = Bullet(self.rect.centerx + bullet_offset_x, self.rect.centery + bullet_offset_y, mouse_x, mouse_y)
-            bullet_group.add(bullet)
+                # move towards the player
+                ai_moving_left = direction_x < 0
+                ai_moving_right = direction_x > 0
+                ai_moving_up = direction_y < 0
+                ai_moving_down = direction_y > 0
 
+                self.move(ai_moving_left, ai_moving_up, ai_moving_right, ai_moving_down)
+                self.update_action(1)  # 1: run
+
+                # update ai vision as the enemy moves
+                self.vision.center = (self.rect.centerx , self.rect.centery)
 
     def update_action(self,new_action):
         #check if the new action is different to the previous one
@@ -248,11 +287,12 @@ class Bullet(pygame.sprite.Sprite):
             if player.alive:
                 player.health -= 5
                 self.kill()
-        if pygame.sprite.spritecollide(enemy, bullet_group, False):
-            if enemy.alive:
-                enemy.health -= 20
-                print(f'Vida do imigo: {enemy.health}')
-                self.kill()
+        for enemy in enemy_group:
+            if pygame.sprite.spritecollide(enemy, bullet_group, False):
+                if enemy.alive:
+                    enemy.health -= 20
+                    print(f'Vida do imigo: {enemy.health}')
+                    self.kill()
 
 
 
@@ -260,6 +300,7 @@ class Bullet(pygame.sprite.Sprite):
 #create sprite groups
 bullet_group = pygame.sprite.Group()
 item_box_group = pygame.sprite.Group()
+enemy_group = pygame.sprite.Group()
 
 
 #temp - testing items
@@ -272,19 +313,18 @@ item_box_group.add(item_box)
 item_box = ItemBox('Coin', 300, 300)
 item_box_group.add(item_box)
 
-player = Player('player', 200, 200, 1, 3, 100)
+player = Player('player', 1000, 200, 0.9, 3, 100)
 health_bar = HealthBar(85, 13, player.health, player.health)
 
-enemy = Player('enemy', 400, 200, 1, 3, 60)
-
-
+enemy = Player('enemy', 400, 200, 0.9, 1, 60)
+enemy2 = Player('enemy', 600, 600, 0.9, 1, 60)
+enemy_group.add(enemy)
+enemy_group.add(enemy2)
 
 def play():
     global moving_right, moving_left, moving_up, moving_down, shoot
     pygame.display.set_caption('Crônicas de Marrcos')
     can_shoot = True
-
-
 
     while True:
         clock.tick(fps)
@@ -305,12 +345,6 @@ def play():
                 if event.key == K_ESCAPE:
                     pygame.quit()
                     sys.exit()
-            if event.type == MOUSEBUTTONDOWN:
-                if event.button == 1 and can_shoot:
-                    shoot = True
-                    can_shoot = False
-
-
             # keyboard button released
             if event.type == KEYUP:
                 if event.key == K_a:
@@ -321,6 +355,16 @@ def play():
                     moving_up = False
                 if event.key == K_s:
                     moving_down = False
+            # mouse button pressed/released
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1 and can_shoot:
+                    shoot = True
+                    can_shoot = False
+                    # Usar a posição do mouse armazenada na variável
+                    player.shoot(mouse_pos[0], mouse_pos[1])
+            if event.type == pygame.MOUSEMOTION:
+                # Atualizar a posição do mouse sempre que houver movimento
+                mouse_pos = pygame.mouse.get_pos()
             if event.type == MOUSEBUTTONUP:
                 if event.button == 1:
                     shoot = False
@@ -331,7 +375,7 @@ def play():
         if player.alive:
             #shoot bullets
             if shoot:
-                player.shoot()
+                player.shoot(mouse_pos[0], mouse_pos[1])
             if moving_left or moving_up or moving_right or moving_down:
                 player.update_action(1) #1: run
             else:
@@ -351,12 +395,18 @@ def play():
         bullet_group.draw(screen)
         item_box_group.update()
         item_box_group.draw(screen)
+
         player.update()
         player.draw()
-        enemy.update()
-        enemy.draw()
+
+        for enemy in enemy_group:
+            enemy.ai()
+            enemy.update()
+            enemy.draw()
+
         pygame.display.flip()
 
 
 
 play()
+
