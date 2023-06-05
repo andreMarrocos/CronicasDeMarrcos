@@ -313,7 +313,7 @@ item_box_group.add(item_box)
 item_box = ItemBox('Coin', 300, 300)
 item_box_group.add(item_box)
 
-player = Player('player', 1000, 200, 0.9, 3, 100)
+player = Player('player', 1000, 200, 1, 3, 100)
 health_bar = HealthBar(85, 13, player.health, player.health)
 
 enemy = Player('enemy', 400, 200, 0.9, 1, 60)
